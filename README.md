@@ -1,8 +1,8 @@
 # ExchangeRateManager
 
-This is an example project that combines multiple technologies around a .NET Web API application. It also serves as a scaffold project for bootstrapping my .NET projects developments.
+This is an example project that combines multiple technologies around a .NET Web API application. It also serves as a scaffold project for bootstrapping my .NET projects developments. Took about 3 weeks to implement this on my free time and weekends.
 
-This RESTful service consumes Alpha Vantage Web API for the Foreign Exchange (ForEx) Rates between two currencies.
+This RESTful service that consumes Alpha Vantage Web API for the Foreign Exchange (ForEx) Rates between two currencies.
 
 The request calls the third party API and processes the response, returning:
 - a 200 with the expected message,
@@ -18,6 +18,27 @@ The response is always immediately returned. When consuming live data, the servi
 Optionally the entities are cached on a ValKey/Redis Distributed cache or In memory cache for faster response.
 
 If there is a new rate on the source, it will also trigger the RabbitMQ message service to broadcast the update to other subscribed services.
+
+## Features
+The project has the following features architectures and technologies:
+- Clean architecture using Controller Service Repository structure
+- Sub-projects organized by component level
+- AutoMapping profiles for mapping between types
+- Data Transfer Objects (DTOs)
+- Dependencies self discovery at startup. No need to inject them manually
+- Keyed services automatic selection using appSettings.json
+- Categorization at component level using `IClient` `IService` and `IRepository` interfaces
+- Unit tests and integration tests
+- Use of Fixures and Fakers for automatically generation of realistic test data.
+- Use of Distributed cache
+- Message queueing
+- Technologies:
+  - ASP.NET 8
+  - PostgreSQL
+  - Entity Framework
+  - Valkey/Redis distributed cache
+  - RabbitMQ Message queueing service
+  - Hangfire for background and scheduled jobs
 
 ## Project Structure
 The project has the following structure:
@@ -99,5 +120,18 @@ On the `/src` folder there are four files:
     For updating the local compose environment you can just call this last command.
 
 For the first time just run the `docker-compose-up.bat`
+
+## Points to improve / TODO List:
+- Improve unit and functional tests
+- Use Serilog, improve and customize logging.
+- Send logs to a logging service or store them into a table.
+- Add authentication/Authorization layers and use JWT tokens
+- The HTTPS certificate is only used for example purposes and safe local development. If the service is behind a gateway like nginx we can disable this.
+- If the services will only use small clumps of star or snowflake data, change Connection to use a NoSQL database (Ex: MongoDB)
+- Implement pipelines for deployment into another environments. Improve and test the compose script (docker-compose.override.yml) for other environments as is is just an example mockup.
+- Adopt CI/CD tecnologies like jenkins, gitlab pipelines, azure devops pipelines, terraform, octopus
+- Redis/Valkey allows to have persistent shared cache. If the service does not require any kind of relational data from the time being, consider using a shared cache only. No ORM like EF is required.
+- Consider switch RabbitMQ.Client to MassTransit Framework, if consumer operations are needed in the future or requirement for better support for asynchronous operations https://masstransit.io/quick-starts/rabbitmq
+- Use TLS connection to access docker remotely. Current commands exposes the docker host cli. See initializeDocker.sh https://stackoverflow.com/questions/63416280/how-to-expose-docker-tcp-socket-on-wsl2-wsl-installed-docker-not-docker-deskt
 
 ### And that's it. Enjoy. Feel free for feedback for anything that could be improved. 🍺
