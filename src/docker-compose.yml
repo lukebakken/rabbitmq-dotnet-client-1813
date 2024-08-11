@@ -1,0 +1,37 @@
+﻿version: '3.4'
+x-project-name: exchangeratemanager
+services:
+  postgres:
+    container_name: postgres
+    hostname: postgres
+    image: postgres:alpine
+    restart: always
+    ports:
+      - 5432:5432
+
+  rabbitmq:
+    container_name: rabbitmq
+    hostname: rabbitmq
+    image: rabbitmq:management-alpine
+    ports:
+      - 5672:5672       #Service Port
+      - 15672:15672     #UI Port
+    depends_on:
+      - postgres
+    restart: always
+
+  valkey:
+    container_name: valkey
+    hostname: valkey
+    image: valkey/valkey:alpine
+    command: valkey-server /etc/valkey/valkey.conf
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+    ports:
+      - 6379:6379
+    depends_on:
+      - postgres
+    restart: always

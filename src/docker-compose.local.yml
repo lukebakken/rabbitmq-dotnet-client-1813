@@ -1,0 +1,59 @@
+﻿version: '3.4'
+
+services:
+  rabbitmq:
+    volumes:
+      - /var/exchangeratemanager/rabbitmq/data/:/var/lib/rabbitmq/
+      - /var/exchangeratemanager/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+      - exchangeratemanager_network
+
+  valkey:
+    environment:
+      - VALKEY_PASSWORD=valkey
+    volumes:
+      - /var/exchangeratemanager/valkey/dаta:/data
+      - /var/exchangeratemanager/valkey/valkey.conf:/etc/valkey/valkey.conf
+    networks:
+      - exchangeratemanager_network
+
+  postgres:
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - /var/exchangeratemanager/postgres/data:/var/lib/postgresql/data
+    networks:
+      - exchangeratemanager_network
+
+  redisinsight:
+    container_name: redisinsight
+    hostname: redisinsight
+    image: redis/redisinsight:latest
+    restart: always
+    ports:
+      - 5540:5540
+    user: "1000:1000"
+    volumes:
+      - /var/exchangeratemanager/valkey/insight_data:/data
+    depends_on:
+      - valkey
+    networks:
+      - exchangeratemanager_network
+
+  # exchangeratemanager:
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Local
+  #     - ASPNETCORE_HTTP_PORTS=8080
+  #     - ASPNETCORE_HTTPS_PORTS=8081
+  #   ports:
+  #     - "8080"
+  #     - "8081"
+  #   volumes:
+  #     - /var/exchangeratemanager/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
+  #     - /var/exchangeratemanager/ASP.NET/Https:/home/app/.aspnet/https:ro
+  #   networks:
+  #     - exchangeratemanager_network
+
+networks:
+  exchangeratemanager_network:

@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExchangeRateManager.ApiClients\ExchangeRateManager.ApiClients.csproj" />
+    <ProjectReference Include="..\ExchangeRateManager.Common\ExchangeRateManager.Common.csproj" />
+    <ProjectReference Include="..\ExchangeRateManager.Dtos\ExchangeRateManager.Dtos.csproj" />
+    <ProjectReference Include="..\ExchangeRateManager.Repositories\ExchangeRateManager.Repositories.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Interfaces\Base\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hangfire.Core" Version="1.8.14" />
+    <PackageReference Include="RabbitMQ.Client" Version="6.8.1" />
+  </ItemGroup>
+
+</Project>

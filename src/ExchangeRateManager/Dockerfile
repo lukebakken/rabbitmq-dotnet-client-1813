@@ -1,0 +1,39 @@
+#See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
+
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+USER app
+WORKDIR /app
+EXPOSE 8080
+EXPOSE 8081
+COPY aspnetapp.pfx /https/aspnetapp.pfx
+
+## Copy the certificate into the container
+#
+## Set environment variables for the certificate
+ENV ASPNETCORE_Kestrel__Certificates__Default__Password="12345"
+ENV ASPNETCORE_Kestrel__Certificates__Default__Path="/https/aspnetapp.pfx"
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src
+COPY ["ExchangeRateManager/ExchangeRateManager.csproj", "ExchangeRateManager/"]
+COPY ["ExchangeRateManager.Common/ExchangeRateManager.Common.csproj", "ExchangeRateManager.Common/"]
+COPY ["ExchangeRateManager.Dtos/ExchangeRateManager.Dtos.csproj", "ExchangeRateManager.Dtos/"]
+COPY ["ExchangeRateManager.MappingProfiles/ExchangeRateManager.MappingProfiles.csproj", "ExchangeRateManager.MappingProfiles/"]
+COPY ["ExchangeRateManager.ApiClients/ExchangeRateManager.ApiClients.csproj", "ExchangeRateManager.ApiClients/"]
+COPY ["ExchangeRateManager.Repositories/ExchangeRateManager.Repositories.csproj", "ExchangeRateManager.Repositories/"]
+COPY ["ExchangeRateManager.Services/ExchangeRateManager.Services.csproj", "ExchangeRateManager.Services/"]
+RUN dotnet restore "./ExchangeRateManager/ExchangeRateManager.csproj"
+COPY . .
+WORKDIR "/src/ExchangeRateManager"
+RUN dotnet build "./ExchangeRateManager.csproj" -c $BUILD_CONFIGURATION -o /app/build
+
+FROM build AS publish
+ARG BUILD_CONFIGURATION=Release
+RUN dotnet publish "./ExchangeRateManager.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+ENTRYPOINT ["dotnet", "ExchangeRateManager.dll"]

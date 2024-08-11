@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>28b26d64-fd31-4d6e-9e72-831abfdb9aba</UserSecretsId>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerfileRunArguments>--network src_exchangeratemanager_network</DockerfileRunArguments>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="docker-cli" Version="27.1.1" GeneratePathProperty="true" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.14" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.14" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.20.9" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.7">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.7">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.7" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ExchangeRateManager.Common\ExchangeRateManager.Common.csproj" />
+    <ProjectReference Include="..\ExchangeRateManager.Dtos\ExchangeRateManager.Dtos.csproj" />
+    <ProjectReference Include="..\ExchangeRateManager.MappingProfiles\ExchangeRateManager.MappingProfiles.csproj" />
+    <ProjectReference Include="..\ExchangeRateManager.Services\ExchangeRateManager.Services.csproj" />
+  </ItemGroup>
+
+  <Target Name="SetDockerPath" BeforeTargets="Build" Condition="'$(OS)' == 'Windows_NT'">
+    <Message Importance="high" Text="Checking for 'docker-cli' presence... ($(Pkgdocker-cli)\tools)" />
+    <Exec Command="powershell -NoProfile -File $(MSBuildProjectDirectory)\AddDockerToPath.ps1 $(Pkgdocker-cli)\tools" />
+  </Target>
+
+  <!--<Target Name="InitializeDockerDependencies" BeforeTargets="Build" Condition="'$(LAUNCH_PROFILE)' == 'Container' AND '$(OS)' == 'Windows_NT'">
+    <Message Importance="high" Text="Building container dependencies." />
+    <Exec Command="docker network create exchangeratemanager_network || rem" />
+    <Exec Command="docker compose -f ..\docker-compose.yml -f ..\docker-compose.local.yml up -d" />
+  </Target>
+
+  <Target Name="SetContainerNetwork" AfterTargets="PostBuildEvent" Condition="'$(LAUNCH_PROFILE)' == 'Container' AND '$(OS)' == 'Windows_NT'">
+    <Message Importance="high" Text="Adding project container to docker network." />
+    <Exec Command="docker network connect exchangeratemanager_network exchangeratemanager" />
+  </Target>-->
+</Project>
