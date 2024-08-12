@@ -14,7 +14,7 @@ public class IntegrationTextBase(TestsWebApplicationFactory factory)
     /// Catches any Asserts or exceptions to log the unexpected response contents before crashing.
     /// </summary>
     /// <param name="testCall">A delegate pointing to the test.</param>
-    protected async Task TestHandler(TestCall testCall)
+    protected static async Task TestHandler(TestCall testCall)
     {
 		Task<dynamic> test = Task.FromResult<dynamic>(0);
 		try
