@@ -6,7 +6,7 @@ This RESTful service that consumes Alpha Vantage Web API for the Foreign Exchang
 
 The request calls the third party API and processes the response, returning:
 - a 200 with the expected message,
-- a 402 if the service use has reached the limit on a ProblemDetails structure, or,
+- a 402 if the service use has reached the limit on a ProblemDetails structure,
 - a 400 if the inserted currencies are not valid on a ProblemDetails structure.
 
 Getting the rates works on two possible ways.
