@@ -25,6 +25,7 @@ public class GlobalExceptionHandler(
 
         if (exception is ProblemDetailsException problem)
         {
+            _logger.LogWarning(exception, "A handled exception occurred {Message}", exception.Message);
             problemDetails = problem.Details;
             httpContext.Response.StatusCode = problem.Details.Status
                 ?? StatusCodes.Status500InternalServerError;
