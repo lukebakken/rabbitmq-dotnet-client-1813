@@ -54,7 +54,7 @@ public class ExchangeRateService(IForexClient forexClient,
         var isLatest = lastKnownRefreshedDate == default || lastKnownRefreshedDate < rateToUpdate.LastRefreshed;
         if (isLatest)
         {
-            _messageQueueService.SendMessage(MessageQueues.NewForexRate, rateToUpdate);
+            _messageQueueService.SendMessageAsync(MessageQueues.NewForexRate, rateToUpdate);
         }
     }
 

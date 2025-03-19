@@ -15,18 +15,18 @@ namespace ExchangeRateManager.Tests.UnitTests.Services;
 public class RabbitMessageQueueServiceTests : TestBase
 {
     private readonly RabbitMessageQueueService _service;
-    private readonly Mock<IAsyncConnectionFactory> _factoryMock = new();
+    private readonly Mock<IConnectionFactory> _factoryMock = new();
     private readonly Mock<IConnection> _connectionMock = new();
-    private readonly Mock<IModel> _channelMock = new();
+    private readonly Mock<IChannel> _channelMock = new();
 
     public RabbitMessageQueueServiceTests() : base()
     {
         _connectionMock
-            .Setup(x => x.CreateModel())
+            .Setup(x => x.CreateChannelAsync())
             .Returns(_channelMock.Object);
 
         _factoryMock
-            .Setup(x => x.CreateConnection())
+            .Setup(x => x.CreateConnectionAsync())
             .Returns(_connectionMock.Object);
 
         _service = new RabbitMessageQueueService(_factoryMock.Object);
@@ -43,7 +43,7 @@ public class RabbitMessageQueueServiceTests : TestBase
             .Setup(x => x.BasicPublish(string.Empty, MessageQueues.NewForexRate, false, null, It.IsAny<ReadOnlyMemory<byte>>()))
             .Callback((string _, string _, bool _, IBasicProperties _, ReadOnlyMemory<byte> message) => actualMessage = message.ToArray());
 
-        _service.SendMessage(MessageQueues.NewForexRate, expectedPayload);
+        _service.SendMessageAsync(MessageQueues.NewForexRate, expectedPayload);
 
         // Assert
         _channelMock

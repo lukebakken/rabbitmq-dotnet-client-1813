@@ -821,7 +821,7 @@ public class ExchangeRateServiceTests : MapperTestBase
             .Verify(x => x.Upsert(It.IsAny<ForexRateEntity>()), Times.Once);
 
         _messageQueueServiceMock
-            .Verify(x => x.SendMessage(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Once);
+            .Verify(x => x.SendMessageAsync(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Once);
 
         VerifyMap<ExchangeRateResponseDto, ForexRateEntity>(Times.Once);
     }
@@ -840,7 +840,7 @@ public class ExchangeRateServiceTests : MapperTestBase
             .Verify(x => x.Upsert(It.IsAny<ForexRateEntity>()), Times.Once);
 
         _messageQueueServiceMock
-            .Verify(x => x.SendMessage(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Once);
+            .Verify(x => x.SendMessageAsync(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Once);
 
         VerifyMap<ExchangeRateResponseDto, ForexRateEntity>(Times.Once);
     }
@@ -859,7 +859,7 @@ public class ExchangeRateServiceTests : MapperTestBase
             .Verify(x => x.Upsert(It.IsAny<ForexRateEntity>()), Times.Once);
 
         _messageQueueServiceMock
-            .Verify(x => x.SendMessage(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Never);
+            .Verify(x => x.SendMessageAsync(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Never);
 
         VerifyMap<ExchangeRateResponseDto, ForexRateEntity>(Times.Once);
     }

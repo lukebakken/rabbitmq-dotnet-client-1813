@@ -10,27 +10,28 @@ namespace ExchangeRateManager.Services
     /// </summary>
     public class RabbitMessageQueueService : IMessageQueueService, IScoped
     {
-        private readonly IAsyncConnectionFactory _factory;
+        private readonly IConnectionFactory _factory;
         private readonly IConnection connection;
 
-        public RabbitMessageQueueService(IAsyncConnectionFactory factory)
+        public RabbitMessageQueueService(IConnectionFactory factory)
         {
             _factory = factory;
-            connection = _factory.CreateConnection();
+            // Note: there should be a StartAsync or similar method for these service classes.
+            connection = _factory.CreateConnectionAsync().GetAwaiter().GetResult();
         }
-        public void SendMessage<T>(string queue, T message)
-        {
-            using var channel = connection.CreateModel();
 
-            channel.QueueDeclare(
+        public async Task SendMessageAsync<T>(string queue, T message)
+        {
+            using var channel = await connection.CreateChannelAsync();
+
+            await channel.QueueDeclareAsync(
                 queue: queue,
                 durable: false, exclusive: false,
                 autoDelete: false, arguments: null);
 
-            channel.BasicPublish(
+            await channel.BasicPublishAsync(
                 exchange: string.Empty,
                 routingKey: queue,
-                basicProperties: null,
                 body: message.ToUTF8JsonByteArray());
         }
     }

@@ -7,5 +7,5 @@ namespace ExchangeRateManager.Services.Interfaces;
 /// </summary>
 public interface IMessageQueueService : IService
 {
-    void SendMessage<T>(string queue, T message);
+    Task SendMessageAsync<T>(string queue, T message);
 }

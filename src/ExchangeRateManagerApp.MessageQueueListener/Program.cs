@@ -1,24 +1,24 @@
-﻿using RabbitMQ.Client.Events;
+﻿using ExchangeRateManager.Common.Constants;
 using RabbitMQ.Client;
-using System.Text;
-using ExchangeRateManager.Common.Constants;
+using RabbitMQ.Client.Events;
 using System.Diagnostics;
+using System.Text;
 
 namespace ExchangeRateManagerApp.MessageQueueListener
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             var factory = new ConnectionFactory
             {
                 Uri = new Uri("amqp://guest:guest@rabbitmq:5672/")
             };
 
-            using var connection = factory.CreateConnection();
-            using var channel = connection.CreateModel();
+            using var connection = await factory.CreateConnectionAsync();
+            using var channel = await connection.CreateChannelAsync();
 
-            channel.QueueDeclare(queue: MessageQueues.NewForexRate,
+            await channel.QueueDeclareAsync(queue: MessageQueues.NewForexRate,
                                  durable: false,
                                  exclusive: false,
                                  autoDelete: false,
@@ -33,20 +33,19 @@ namespace ExchangeRateManagerApp.MessageQueueListener
                 }
             };
 
-            Console.WriteLine(" [*] Waiting for messages. Hit 'Ctrl+C' to terminate.");
-            var consumer = new EventingBasicConsumer(channel);
-            consumer.Received += (model, ea) =>
+            Console.WriteLine(" [*] Waiting for messages. Hit 'Ctrl+C' or any key to terminate.");
+            var consumer = new AsyncEventingBasicConsumer(channel);
+            consumer.ReceivedAsync += (model, ea) =>
             {
                 var body = ea.Body.ToArray();
                 var message = Encoding.UTF8.GetString(body);
                 Console.WriteLine($" [x] Received {message}");
-                };
+                return Task.CompletedTask;
+            };
 
-            channel.BasicConsume(queue: MessageQueues.NewForexRate, autoAck: true, consumer: consumer);
-            while (true)
-            {
-                Task.Delay(1000);
-            }
+            await channel.BasicConsumeAsync(queue: MessageQueues.NewForexRate, autoAck: true, consumer: consumer);
+
+            Console.ReadLine();
         }
     }
 }
