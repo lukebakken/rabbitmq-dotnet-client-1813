@@ -7,7 +7,6 @@ using RabbitMQ.Client;
 using Shouldly;
 using System.Text;
 using System.Threading.Channels;
-using System.Threading;
 
 namespace ExchangeRateManager.Tests.UnitTests.Services;
 
@@ -43,13 +42,13 @@ public class RabbitMessageQueueServiceTests : TestBase
         var expectedPayload = KeyValuePair.Create("crash", "test");
         byte[] actualMessage = [];
         KeyValuePair<string, string> actualText;
-        
+
+        byte[] messageBodyBytes = System.Text.Encoding.UTF8.GetBytes("Hello, world!");
+
         _channel
             .When(x => x.BasicPublishAsync(
                 string.Empty, MessageQueues.NewForexRate, false,
-                Arg.Any<IProperties>(),
-                Arg.Any<ReadOnlyMemory<byte>>(),
-                Arg.Any<CancellationToken>()))
+                Arg.Any<BasicProperties>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>()))
             .Do(callInfo => actualMessage = ((ReadOnlyMemory<byte>)callInfo[4]).ToArray());
 
         await _service.SendMessage(MessageQueues.NewForexRate, expectedPayload);
@@ -59,7 +58,7 @@ public class RabbitMessageQueueServiceTests : TestBase
             .Received(1)
             .BasicPublishAsync(
                 string.Empty, MessageQueues.NewForexRate, false,
-                Arg.Any<IProperties>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>());
+                Arg.Any<BasicProperties>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>());
 
         actualMessage.ShouldNotBeEmpty();
         actualText = Encoding.UTF8.GetString(actualMessage).FromJson<KeyValuePair<string, string>>();

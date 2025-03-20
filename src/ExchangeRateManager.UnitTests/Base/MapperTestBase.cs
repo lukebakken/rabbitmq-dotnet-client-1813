@@ -94,6 +94,6 @@ public abstract class MapperTestBase : TestBase
     /// <param name="times">The number of times a method is expected to be method.</param>
     protected void DidNotReceiveMap<TSource, TDest>()
         => _mockedMapper
-            .Received()
+            .DidNotReceive()
             .Map<TDest>(Arg.Any<TSource>());
 }

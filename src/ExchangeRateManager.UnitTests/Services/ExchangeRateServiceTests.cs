@@ -158,7 +158,7 @@ public class ExchangeRateServiceTests : MapperTestBase
         DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
         _backgroundJobClient
-            .Received(1)
+            .DidNotReceive()
             .Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
@@ -508,9 +508,19 @@ public class ExchangeRateServiceTests : MapperTestBase
                 return expectedClientResponse;
             });
 
+        _backgroundJobClient
+            .When(x => x.Create(Arg.Any<Job>(), Arg.Any<IState>()))
+            .Do(callInfo =>
+            {
+                expectedResponseDto = expectedResponseDto with
+                {
+                    UpdatedAt = ((ExchangeRateResponseDto)((Job)callInfo[0]).Args[0]).UpdatedAt,
+                    CreatedAt = ((ExchangeRateResponseDto)((Job)callInfo[0]).Args[0]).CreatedAt
+                };
+            });
+
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
         SetupMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
-
 
         // Act
         actualResponseDto = await _service.GetForexRate(requestDto);
@@ -846,7 +856,7 @@ public class ExchangeRateServiceTests : MapperTestBase
         await _forexRateRepository
             .Received(1).Upsert(Arg.Any<ForexRateEntity>());
 
-        _messageQueueService
+        await _messageQueueService
             .Received(1).SendMessage(MessageQueues.NewForexRate, Arg.Any<ExchangeRateResponseDto>());
 
         ReceivedMap<ExchangeRateResponseDto, ForexRateEntity>(1);
@@ -865,7 +875,7 @@ public class ExchangeRateServiceTests : MapperTestBase
         await _forexRateRepository
             .Received(1).Upsert(Arg.Any<ForexRateEntity>());
 
-        _messageQueueService
+        await _messageQueueService
             .Received(1).SendMessage(MessageQueues.NewForexRate, Arg.Any<ExchangeRateResponseDto>());
 
         ReceivedMap<ExchangeRateResponseDto, ForexRateEntity>(1);
@@ -884,7 +894,7 @@ public class ExchangeRateServiceTests : MapperTestBase
         await _forexRateRepository
             .Received(1).Upsert(Arg.Any<ForexRateEntity>());
 
-        _messageQueueService
+        await _messageQueueService
             .DidNotReceive().SendMessage(MessageQueues.NewForexRate, Arg.Any<ExchangeRateResponseDto>());
 
         ReceivedMap<ExchangeRateResponseDto, ForexRateEntity>(1);

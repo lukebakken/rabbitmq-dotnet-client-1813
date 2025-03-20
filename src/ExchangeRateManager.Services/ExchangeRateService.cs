@@ -142,7 +142,7 @@ public class ExchangeRateService(IForexClient forexClient,
         ExchangeRateResponseDto? result = _mapper.Map<ExchangeRateResponseDto>(response);
         if (entity != default)
         {
-            result = result with
+        result = result with
             {
                 CreatedAt = entity.CreatedAt,
                 UpdatedAt = DateTime.UtcNow

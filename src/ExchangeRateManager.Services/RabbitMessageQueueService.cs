@@ -22,15 +22,17 @@ namespace ExchangeRateManager.Services
             using var connection = await _factory.CreateConnectionAsync();
             using var channel = await connection.CreateChannelAsync();
 
-            await channel.QueueDeclareAsync(
-                queue: queue,
-                durable: false, exclusive: false,
-                autoDelete: false, arguments: null);
+            await channel.QueueDeclareAsync(queue, false, false, false);
 
             await channel.BasicPublishAsync(
-                string.Empty, queue,
+                string.Empty, queue, false, new BasicProperties(),
                 message.ToUTF8JsonByteArray(),
                 cancellationToken);
+
+            await channel.BasicPublishAsync(string.Empty, queue,
+                false,
+                message.ToUTF8JsonByteArray(),
+                cancellationToken); 
         }
     }
 }
