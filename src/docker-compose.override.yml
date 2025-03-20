@@ -3,35 +3,57 @@
 services:
   rabbitmq:
     volumes:
-      - ${rabbitmq-volume}:/var/lib/rabbitmq/
-      - ${rabbitmq-log}:/var/log/rabbitmq
+      - ./container_data/rabbitmq/lib:/var/lib/rabbitmq
+      - ./container_data/rabbitmq/log:/var/log/rabbitmq
+    networks:
+      - exchangeratemanager_network
 
   valkey:
-    volumes:
-      - ${valkey-volume}:/data
-      - ${valkey-conf}:/etc/valkey/valkey.conf
     environment:
       - VALKEY_PASSWORD=valkey
+    volumes:
+      - ./container_data/valkey/dаta:/data
+      - ./container_data/valkey/valkey.conf:/etc/valkey/valkey.conf
+    networks:
+      - exchangeratemanager_network
 
   postgres:
     environment:
-      - POSTGRES_USER=${exchangeRate-db-User}
-      - POSTGRES_PASSWORD=${exchangeRate-db-Pass}
-    volumes: 
-      - ${exchangeRate-db-data}:/var/lib/postgresql/data
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - ./container_data/postgres/data:/var/lib/postgresql/data
+    networks:
+      - exchangeratemanager_network
 
-  exchangeratemanager:
-    image: ${DOCKER_REGISTRY-}exchangeratemanager
-    depends_on:
-      - redis
-      - postgres
-    build:
-      context: .
-      dockerfile: ExchangeRateManager/Dockerfile
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Local
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ASPNETCORE_HTTPS_PORTS=8081
+  redisinsight:
+    container_name: redisinsight
+    hostname: redisinsight
+    image: redis/redisinsight:latest
+    restart: always
     ports:
-      - "8080"
-      - "8081"
+      - 5540:5540
+    user: "1000:1000"
+    volumes:
+      - ./container_data/valkey/insight_data:/data
+    depends_on:
+      - valkey
+    networks:
+      - exchangeratemanager_network
+
+  # exchangeratemanager:
+  #   environment:
+  #     - ASPNETCORE_ENVIRONMENT=Local
+  #     - ASPNETCORE_HTTP_PORTS=8080
+  #     - ASPNETCORE_HTTPS_PORTS=8081
+  #   ports:
+  #     - "8080"
+  #     - "8081"
+  #   volumes:
+  #     - /var/exchangeratemanager/Microsoft/UserSecrets:/home/app/.microsoft/usersecrets:ro
+  #     - /var/exchangeratemanager/ASP.NET/Https:/home/app/.aspnet/https:ro
+  #   networks:
+  #     - exchangeratemanager_network
+
+networks:
+  exchangeratemanager_network:
