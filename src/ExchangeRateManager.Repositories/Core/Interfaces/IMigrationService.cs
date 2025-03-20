@@ -1,6 +1,6 @@
 ﻿using ExchangeRateManager.Common.Interfaces.Base;
 
-namespace ExchangeRateManager.Repositories.Core.Core;
+namespace ExchangeRateManager.Repositories.Core.Interfaces;
 
 public interface IMigrationService : IService
 {

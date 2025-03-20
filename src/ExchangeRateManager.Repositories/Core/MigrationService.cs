@@ -1,6 +1,6 @@
 ﻿using ExchangeRateManager.Common.Configuration;
 using ExchangeRateManager.Common.Interfaces.ServiceLifetime;
-using ExchangeRateManager.Repositories.Core.Core;
+using ExchangeRateManager.Repositories.Core.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 

@@ -1,10 +1,10 @@
 ﻿using ExchangeRateManager.Common;
 using ExchangeRateManager.Common.Extensions;
-using ExchangeRateManager.Common.Interfaces.Base;
-using ExchangeRateManager.Common.Interfaces.ServiceLifetime;
 using Shouldly;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
+using ExchangeRateManager.Common.Interfaces.Base;
+using ExchangeRateManager.Common.Interfaces.ServiceLifetime;
 
 namespace ExchangeRateManager.Common.UnitTests.Extensions;
 

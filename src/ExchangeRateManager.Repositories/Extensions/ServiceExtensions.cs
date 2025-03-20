@@ -1,6 +1,6 @@
 ﻿using ExchangeRateManager.Common.Constants;
 using ExchangeRateManager.Repositories.Core;
-using ExchangeRateManager.Repositories.Core.Core;
+using ExchangeRateManager.Repositories.Core.Interfaces;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;

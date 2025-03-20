@@ -2,10 +2,9 @@
 using AutoMapper;
 using ExchangeRateManager.ApiClients.Responses;
 using ExchangeRateManager.Dtos;
-using ExchangeRateManager.MappingProfiles;
 using Shouldly;
 
-namespace ExchangeRateManager.MappingProfiles.UnitTests.MappingProfiles;
+namespace ExchangeRateManager.MappingProfiles.UnitTests;
 
 /// <summary>
 /// Tests the AutoMapper mapping profiles for ExchangeRate related type conversions.
