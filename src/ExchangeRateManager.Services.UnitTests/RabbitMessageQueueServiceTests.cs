@@ -1,14 +1,12 @@
 ﻿using ExchangeRateManager.Common.Constants;
 using ExchangeRateManager.Common.Extensions;
-using ExchangeRateManager.Services;
-using ExchangeRateManager.Tests.UnitTests.Base;
+using ExchangeRateManager.UnitTests.Base;
 using NSubstitute;
 using RabbitMQ.Client;
 using Shouldly;
 using System.Text;
-using System.Threading.Channels;
 
-namespace ExchangeRateManager.Tests.UnitTests.Services;
+namespace ExchangeRateManager.Services.UnitTests;
 
 /// <summary>
 /// Tests for the RabbitMQ message queue service.
@@ -43,7 +41,7 @@ public class RabbitMessageQueueServiceTests : TestBase
         byte[] actualMessage = [];
         KeyValuePair<string, string> actualText;
 
-        byte[] messageBodyBytes = System.Text.Encoding.UTF8.GetBytes("Hello, world!");
+        byte[] messageBodyBytes = Encoding.UTF8.GetBytes("Hello, world!");
 
         _channel
             .When(x => x.BasicPublishAsync(

@@ -36,6 +36,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ExchangeRateManager.MappingProfiles\ExchangeRateManager.MappingProfiles.csproj" />
     <ProjectReference Include="..\ExchangeRateManager.Services\ExchangeRateManager.Services.csproj" />
+    <ProjectReference Include="..\ExchangeRateManager.UnitTests\ExchangeRateManager.UnitTests.csproj" />
     <ProjectReference Include="..\ExchangeRateManager\ExchangeRateManager.csproj" />
   </ItemGroup>
 

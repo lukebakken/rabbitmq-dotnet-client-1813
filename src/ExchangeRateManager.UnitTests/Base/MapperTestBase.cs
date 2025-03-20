@@ -2,7 +2,7 @@
 using NSubstitute;
 using System.Diagnostics.CodeAnalysis;
 
-namespace ExchangeRateManager.Tests.UnitTests.Base;
+namespace ExchangeRateManager.UnitTests.Base;
 
 [ExcludeFromCodeCoverage(Justification = "Part of the test suite.")]
 public abstract class MapperTestBase : TestBase

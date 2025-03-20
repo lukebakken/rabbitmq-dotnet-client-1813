@@ -1,6 +1,6 @@
 ﻿using AutoFixture;
 
-namespace ExchangeRateManager.Tests.UnitTests.Base
+namespace ExchangeRateManager.UnitTests.Base
 {
     /// <summary>
     /// The test base for common components in all unit tests

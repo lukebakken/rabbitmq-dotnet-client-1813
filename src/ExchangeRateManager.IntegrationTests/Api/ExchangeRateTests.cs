@@ -6,7 +6,7 @@ using Shouldly;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
-namespace ExchangeRateManager.Tests.IntegrationTests.Api;
+namespace ExchangeRateManager.IntegrationTests.Api;
 
 /// <summary>
 /// Functional tests for the "ExchangeRate" endpoints

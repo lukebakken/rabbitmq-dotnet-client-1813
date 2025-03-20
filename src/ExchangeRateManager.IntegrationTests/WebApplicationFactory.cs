@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Environments = ExchangeRateManager.Common.Constants.Environments;
 
-namespace ExchangeRateManager.Tests.IntegrationTests
+namespace ExchangeRateManager.IntegrationTests
 {
     /// <summary>
     /// Factory for bootstrapping an application in memory for functional end to end tests.

@@ -3,7 +3,7 @@ using Shouldly;
 using System.Text;
 using System.Text.Json;
 
-namespace ExchangeRateManager.Tests.UnitTests.TypeConverters
+namespace ExchangeRateManager.Common.UnitTests.TypeConverters
 {
     /// <summary>
     /// Tests the SQL DateTime json Type converter 

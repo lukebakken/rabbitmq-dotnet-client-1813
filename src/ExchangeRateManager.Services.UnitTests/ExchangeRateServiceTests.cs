@@ -9,9 +9,8 @@ using ExchangeRateManager.Dtos;
 using ExchangeRateManager.MappingProfiles;
 using ExchangeRateManager.Repositories.Entities;
 using ExchangeRateManager.Repositories.Interfaces;
-using ExchangeRateManager.Services;
 using ExchangeRateManager.Services.Interfaces;
-using ExchangeRateManager.Tests.UnitTests.Base;
+using ExchangeRateManager.UnitTests.Base;
 using Hangfire;
 using Hangfire.Common;
 using Hangfire.States;
@@ -22,7 +21,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using Shouldly;
 
-namespace ExchangeRateManager.Tests.UnitTests.Services;
+namespace ExchangeRateManager.Services.UnitTests;
 
 /// <summary>
 /// Tests for the ExchangeRateService
@@ -55,10 +54,10 @@ public class ExchangeRateServiceTests : MapperTestBase
         var expectedResponseDto = _actualMapper
             .Map<ExchangeRateResponseDto>(expectedClientResponse)
             with
-            {
-                CreatedAt = null,
-                UpdatedAt = null,
-            };
+        {
+            CreatedAt = null,
+            UpdatedAt = null,
+        };
 
         var expectedEntity = _actualMapper.Map<ForexRateEntity>(expectedResponseDto);
         expectedEntity.CreatedAt = DateTime.UtcNow;
@@ -206,7 +205,7 @@ public class ExchangeRateServiceTests : MapperTestBase
             .FindByIdAsync(Arg.Any<ForexRateKey>())
             .Returns(callInfo =>
             {
-                actualRateId = (ForexRateKey) callInfo[0];
+                actualRateId = (ForexRateKey)callInfo[0];
                 return expectedEntity;
             });
 
@@ -273,7 +272,7 @@ public class ExchangeRateServiceTests : MapperTestBase
 
         _forexRateRepository
             .When(x => x.FindByIdAsync(Arg.Any<ForexRateKey>()))
-            .Do(callInfo => actualRateId = (ForexRateKey) callInfo[0]);
+            .Do(callInfo => actualRateId = (ForexRateKey)callInfo[0]);
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
 
@@ -434,7 +433,7 @@ public class ExchangeRateServiceTests : MapperTestBase
             .FindByIdAsync(Arg.Any<ForexRateKey>())
             .Returns(callInfo =>
             {
-                actualRateId = (ForexRateKey) callInfo[0];
+                actualRateId = (ForexRateKey)callInfo[0];
                 return expectedEntity;
             });
 
@@ -451,7 +450,7 @@ public class ExchangeRateServiceTests : MapperTestBase
         await _forexRateRepository
             .Received(1)
             .FindByIdAsync(Arg.Any<ForexRateKey>());
-        
+
         ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
         ReceivedMap<ForexRateEntity, ExchangeRateResponseDto>(1);
 
@@ -492,7 +491,7 @@ public class ExchangeRateServiceTests : MapperTestBase
             .FindByIdAsync(Arg.Any<ForexRateKey>())
             .Returns(callInfo =>
             {
-                actualRateId = (ForexRateKey) callInfo[0];
+                actualRateId = (ForexRateKey)callInfo[0];
                 return expectedEntity;
             });
 
@@ -502,8 +501,8 @@ public class ExchangeRateServiceTests : MapperTestBase
             {
                 actualRequestDto = new ExchangeRateRequestDto
                 {
-                    FromCurrencyCode = (string) callInfo[0],
-                    ToCurrencyCode = (string) callInfo[1]
+                    FromCurrencyCode = (string)callInfo[0],
+                    ToCurrencyCode = (string)callInfo[1]
                 };
                 return expectedClientResponse;
             });
@@ -582,8 +581,8 @@ public class ExchangeRateServiceTests : MapperTestBase
             .ThrowsAsync(new HttpClientLimitReachedException("test"))
             .AndDoes(callInfo => actualRequestDto = new ExchangeRateRequestDto
             {
-                FromCurrencyCode = (string) callInfo[0],
-                ToCurrencyCode = (string) callInfo[1]
+                FromCurrencyCode = (string)callInfo[0],
+                ToCurrencyCode = (string)callInfo[1]
             });
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
@@ -695,7 +694,7 @@ public class ExchangeRateServiceTests : MapperTestBase
             .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
             .ThrowsAsync(new HttpClientLimitReachedException("test"));
 
-        SetupMap<ExchangeRateRequestDto,ForexRateKey>();
+        SetupMap<ExchangeRateRequestDto, ForexRateKey>();
 
         // Act
         var action = async () => await _service.GetForexRate(requestDto);

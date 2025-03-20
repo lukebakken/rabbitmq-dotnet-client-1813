@@ -6,8 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
-    
-namespace ExchangeRateManager.Tests.UnitTests.Common;
+
+namespace ExchangeRateManager.Common.UnitTests;
 
 /// <summary>
 /// Tests for the KeyedServiceFactory

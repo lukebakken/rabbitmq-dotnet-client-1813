@@ -6,7 +6,7 @@ using NSubstitute;
 
 using Environments = ExchangeRateManager.Common.Constants.Environments;
 
-namespace ExchangeRateManager.Tests.UnitTests.Common.Extensions;
+namespace ExchangeRateManager.Common.UnitTests.Extensions;
 
 /// <summary>
 /// Environment Identification Extentions Tests

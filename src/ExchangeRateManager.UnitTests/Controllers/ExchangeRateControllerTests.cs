@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
-namespace ExchangeRateManager.Tests.UnitTests.Controllers;
+namespace ExchangeRateManager.UnitTests.Controllers;
 
 /// <summary>
 /// Tests for the Exchange Rate Controller

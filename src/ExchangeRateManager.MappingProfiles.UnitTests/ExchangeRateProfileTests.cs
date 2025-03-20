@@ -5,7 +5,7 @@ using ExchangeRateManager.Dtos;
 using ExchangeRateManager.MappingProfiles;
 using Shouldly;
 
-namespace ExchangeRateManager.Tests.UnitTests.MappingProfiles;
+namespace ExchangeRateManager.MappingProfiles.UnitTests.MappingProfiles;
 
 /// <summary>
 /// Tests the AutoMapper mapping profiles for ExchangeRate related type conversions.

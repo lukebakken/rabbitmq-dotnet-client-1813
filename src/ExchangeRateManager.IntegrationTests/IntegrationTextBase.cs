@@ -1,6 +1,6 @@
 ﻿using DalSoft.RestClient;
 
-namespace ExchangeRateManager.Tests.IntegrationTests;
+namespace ExchangeRateManager.IntegrationTests;
 
 /// <summary>
 /// Integration tests base components.

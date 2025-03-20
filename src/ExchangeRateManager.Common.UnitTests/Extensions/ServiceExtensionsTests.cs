@@ -6,7 +6,7 @@ using Shouldly;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
-namespace ExchangeRateManager.Tests.UnitTests.Common.Extensions;
+namespace ExchangeRateManager.Common.UnitTests.Extensions;
 
 /// <summary>
 /// Tests for some of the service extensions.
@@ -38,7 +38,7 @@ public class ServiceExtensionsTests
         // Arrange
         IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();
 
-        List<ServiceDescriptor> actualServiceDescriptors  = [];
+        List<ServiceDescriptor> actualServiceDescriptors = [];
         serviceCollection
             .When(x => x.Add(Arg.Any<ServiceDescriptor>()))
             .Do(x => actualServiceDescriptors.Add(x.Arg<ServiceDescriptor>()));
@@ -83,7 +83,7 @@ public class ServiceExtensionsTests
                 typeof(ITestDoubleComponent),
                 typeof(TestClassDoubled2).FullName,
                 typeof(TestClassDoubled2), ServiceLifetime.Transient),
-    
+
             new ServiceDescriptor(
                 typeof(ITestDoubleComponent),
                 sp => sp.GetRequiredService<KeyedServiceFactory>().Create(typeof(ITestDoubleComponent)),
@@ -153,7 +153,7 @@ public class ServiceExtensionsTests
     public void LoadServicesFromAssemblies_LooksForDifferentNamespace_DoesNothing()
     {
         // Arrange
-        IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();       
+        IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();
 
         // Act
         var serviceCollection2 = serviceCollection
