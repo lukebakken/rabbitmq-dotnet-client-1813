@@ -1,5 +1,5 @@
 ﻿using ExchangeRateManager.Common.Serialization;
-using FluentAssertions;
+using Shouldly;
 using System.Text;
 using System.Text.Json;
 
@@ -23,7 +23,7 @@ namespace ExchangeRateManager.Tests.UnitTests.TypeConverters
             var result = converter.Read(ref reader, default!, default!);
 
             // Assert
-            result.Should().Be(new DateTime(2019, 07, 26, 12, 34, 56));
+            result.ShouldBe(new DateTime(2019, 07, 26, 12, 34, 56));
         }
 
         [Fact]
@@ -44,7 +44,7 @@ namespace ExchangeRateManager.Tests.UnitTests.TypeConverters
             Utf8JsonReader reader = new(stream.ToArray());
             reader.Read();
 
-            reader.GetString().Should().Be("2019-07-26 12:34:56");
+            reader.GetString().ShouldBe("2019-07-26 12:34:56");
         }
     }
 }

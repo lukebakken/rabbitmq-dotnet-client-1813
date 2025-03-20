@@ -2,9 +2,9 @@
 using ExchangeRateManager.Common.Extensions;
 using ExchangeRateManager.Common.Interfaces.Base;
 using ExchangeRateManager.Common.Interfaces.ServiceLifetime;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
+using NSubstitute;
 
 namespace ExchangeRateManager.Tests.UnitTests.Common.Extensions;
 
@@ -36,12 +36,13 @@ public class ServiceExtensionsTests
     public void LoadServicesFromAssemblies_LooksForSingleService_RegistersSuccessfully()
     {
         // Arrange
-        Mock<IServiceCollection> serviceCollectionMock = new();
+        
+        IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();
 
         List<ServiceDescriptor> actualServiceDescriptors  = [];
-        serviceCollectionMock
-            .Setup(x => x.Add(It.IsAny<ServiceDescriptor>()))
-            .Callback(actualServiceDescriptors.Add);
+        serviceCollection
+            .When(x => x.Add(Arg.Any<ServiceDescriptor>()))
+            .Do(x => actualServiceDescriptors.Add(x.Arg<ServiceDescriptor>()));
 
         List<ServiceDescriptor> expectedServiceDescriptors =
         [
@@ -50,30 +51,30 @@ public class ServiceExtensionsTests
         ];
 
         // Act
-        var serviceCollection = serviceCollectionMock.Object;
         var serviceCollection2 = serviceCollection
             .LoadServicesFromAssemblies<ITestBaseSingle>();
 
         // Assert
-        serviceCollection2.Should().BeSameAs(serviceCollection);
-        actualServiceDescriptors.Should().BeEquivalentTo(expectedServiceDescriptors, options => options
-            .Including(x => x.ServiceType)
-            .Including(x => x.ImplementationType)
-            .Including(x => x.Lifetime));
+        serviceCollection2.ShouldBeSameAs(serviceCollection);
+        actualServiceDescriptors.ShouldBeEquivalentTo(expectedServiceDescriptors);
+            //, options => options
+            //.Including(x => x.ServiceType)
+            //.Including(x => x.ImplementationType)
+            //.Including(x => x.Lifetime));
 
-        actualServiceDescriptors.All(x => !x.IsKeyedService).Should().BeTrue();
+        actualServiceDescriptors.All(x => !x.IsKeyedService).ShouldBeTrue();
     }
 
     [Fact]
     public void LoadServicesFromAssemblies_LooksForKeyedService_RegistersSuccessfully()
     {
         // Arrange
-        Mock<IServiceCollection> serviceCollectionMock = new();
+        IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();
 
         List<ServiceDescriptor> actualServiceDescriptors = [];
-        serviceCollectionMock
-            .Setup(x => x.Add(It.IsAny<ServiceDescriptor>()))
-            .Callback(actualServiceDescriptors.Add);
+        serviceCollection
+            .When(x => x.Add(Arg.Any<ServiceDescriptor>()))
+            .Do(x => actualServiceDescriptors.Add(x.Arg<ServiceDescriptor>()));
 
         List<ServiceDescriptor> expectedServiceDescriptors =
         [
@@ -94,91 +95,89 @@ public class ServiceExtensionsTests
         ];
 
         // Act
-        var serviceCollection = serviceCollectionMock.Object;
+
         var serviceCollection2 = serviceCollection
             .LoadServicesFromAssemblies<ITestBaseDouble>();
 
         // Assert
-        serviceCollection2.Should().BeSameAs(serviceCollection);
-        actualServiceDescriptors.Count(x => x.IsKeyedService).Should().Be(2);
-        actualServiceDescriptors.Count(x => !x.IsKeyedService).Should().Be(1);
+        serviceCollection2.ShouldBeSameAs(serviceCollection);
+        actualServiceDescriptors.Count(x => x.IsKeyedService).ShouldBe(2);
+        actualServiceDescriptors.Count(x => !x.IsKeyedService).ShouldBe(1);
 
         var expectedKeyed = expectedServiceDescriptors.Where(x => x.IsKeyedService);
         actualServiceDescriptors
-            .Where(x => x.IsKeyedService).Should()
-            .BeEquivalentTo(expectedKeyed, options => options
-            .Including(x => x.ServiceType)
-            .Including(x => x.KeyedImplementationType)
-            .Including(x => x.ServiceKey)
-            .Including(x => x.Lifetime));
+            .Where(x => x.IsKeyedService)
+            .ShouldBeEquivalentTo(expectedKeyed);
+        //, options => options
+        //        .Including(x => x.ServiceType)
+        //        .Including(x => x.KeyedImplementationType)
+        //        .Including(x => x.ServiceKey)
+        //        .Including(x => x.Lifetime));
 
         var expectedFactory = expectedServiceDescriptors.Single(x => !x.IsKeyedService);
         var actualFactory = actualServiceDescriptors.Single(x => !x.IsKeyedService);
-        actualFactory.ImplementationFactory.Should().NotBeNull();
-        actualFactory.Should()
-            .BeEquivalentTo(expectedFactory, options => options
-            .Including(x => x.ServiceType)
-            .Including(x => x.Lifetime));
+        actualFactory.ImplementationFactory.ShouldNotBeNull();
+        actualFactory
+            .ShouldBeEquivalentTo(expectedFactory);
+            //, options => options
+            //    .Including(x => x.ServiceType)
+            //    .Including(x => x.Lifetime));
     }
 
     [Fact]
     public void LoadServicesFromAssemblies_LooksForOrphanService_DoesNothing()
     {
         // Arrange
-        Mock<IServiceCollection> serviceCollectionMock = new();
+        IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();
 
         List<ServiceDescriptor> actualServiceDescriptors = [];
-        serviceCollectionMock
-            .Setup(x => x.Add(It.IsAny<ServiceDescriptor>()))
-            .Callback(actualServiceDescriptors.Add);
+        serviceCollection
+            .When(x => x.Add(Arg.Any<ServiceDescriptor>()))
+            .Do(x => actualServiceDescriptors.Add(x.Arg<ServiceDescriptor>()));
 
         // Act
-        var serviceCollection = serviceCollectionMock.Object;
         var serviceCollection2 = serviceCollection
             .LoadServicesFromAssemblies<ITestBaseOrphan>();
 
         // Assert
-        serviceCollection2.Should().BeSameAs(serviceCollection);
-        actualServiceDescriptors.Should().BeEmpty();
+        serviceCollection2.ShouldBeSameAs(serviceCollection);
+        actualServiceDescriptors.ShouldBeEmpty();
     }
 
     [Fact]
     public void LoadServicesFromAssemblies_NoServiceLifetimeDefined_ThrowsError()
     {
         // Arrange
-        Mock<IServiceCollection> serviceCollectionMock = new();
+        IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();
 
         // Act
-        var serviceCollection = serviceCollectionMock.Object;
-
         var action = () => serviceCollection
             .LoadServicesFromAssemblies<ITestBaseNoLifetime>();
 
         // Assert
-        action.Should().Throw<TypeLoadException>();
-        serviceCollectionMock
-            .Verify(x => x.Add(It.IsAny<ServiceDescriptor>()), Times.Never);
+        action.ShouldThrow<TypeLoadException>();
+        serviceCollection
+            .DidNotReceive()
+            .Add(Arg.Any<ServiceDescriptor>());
     }
 
     [Fact]
     public void LoadServicesFromAssemblies_LooksForDifferentNamespace_DoesNothing()
     {
         // Arrange
-        Mock<IServiceCollection> serviceCollectionMock = new();
-
+        IServiceCollection serviceCollection = Substitute.For<IServiceCollection>();
         List<ServiceDescriptor> actualServiceDescriptors = [];
-        serviceCollectionMock
-            .Setup(x => x.Add(It.IsAny<ServiceDescriptor>()))
-            .Callback(actualServiceDescriptors.Add);
+        serviceCollection
+            .When(x => x.Add(Arg.Any<ServiceDescriptor>()))
+            .Do(x => actualServiceDescriptors.Add(x.Arg<ServiceDescriptor>()));
 
         // Act
-        var serviceCollection = serviceCollectionMock.Object;
         var serviceCollection2 = serviceCollection
-            .LoadServicesFromAssemblies<ISetup>();
+            .LoadServicesFromAssemblies<IHttpClient>();
 
         // Assert
-        serviceCollection2.Should().BeSameAs(serviceCollection);
-        actualServiceDescriptors.Should().BeEmpty();
+        serviceCollection2.ShouldBeSameAs(serviceCollection);
+        actualServiceDescriptors.ShouldBeEmpty();
     }
 
     #endregion LoadServicesFromAssemblies Tests
@@ -193,7 +192,7 @@ public class ServiceExtensionsTests
         var action = () => typeof(object).AssertInterface();
 
         //Assert
-        action.Should().Throw<ArgumentException>();
+        action.ShouldThrow<ArgumentException>();
     }
 
     [Fact]
@@ -203,7 +202,7 @@ public class ServiceExtensionsTests
         var action = () => typeof(IService).AssertInterface();
 
         //Assert
-        action.Should().NotThrow();
+        action.ShouldNotThrow();
     }
 
     #endregion AssertInterface Tests

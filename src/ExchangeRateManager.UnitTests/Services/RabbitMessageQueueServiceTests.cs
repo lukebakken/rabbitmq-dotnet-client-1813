@@ -2,10 +2,12 @@
 using ExchangeRateManager.Common.Extensions;
 using ExchangeRateManager.Services;
 using ExchangeRateManager.Tests.UnitTests.Base;
-using FluentAssertions;
-using Moq;
+using NSubstitute;
 using RabbitMQ.Client;
+using Shouldly;
 using System.Text;
+using System.Threading.Channels;
+using System.Threading;
 
 namespace ExchangeRateManager.Tests.UnitTests.Services;
 
@@ -15,42 +17,52 @@ namespace ExchangeRateManager.Tests.UnitTests.Services;
 public class RabbitMessageQueueServiceTests : TestBase
 {
     private readonly RabbitMessageQueueService _service;
-    private readonly Mock<IAsyncConnectionFactory> _factoryMock = new();
-    private readonly Mock<IConnection> _connectionMock = new();
-    private readonly Mock<IModel> _channelMock = new();
+    private readonly IConnectionFactory _factory = Substitute.For<IConnectionFactory>();
+    private readonly IConnection _connection = Substitute.For<IConnection>();
+    private readonly IChannel _channel = Substitute.For<IChannel>();
+
 
     public RabbitMessageQueueServiceTests() : base()
     {
-        _connectionMock
-            .Setup(x => x.CreateModel())
-            .Returns(_channelMock.Object);
+        _connection
+            .CreateChannelAsync()
+            .Returns(_channel);
 
-        _factoryMock
-            .Setup(x => x.CreateConnection())
-            .Returns(_connectionMock.Object);
+        _factory
+            .CreateConnectionAsync()
+            .Returns(_connection);
 
-        _service = new RabbitMessageQueueService(_factoryMock.Object);
+        _service = new RabbitMessageQueueService(_factory);
     }
 
+    interface IProperties : IReadOnlyBasicProperties, IAmqpHeader { }
+
     [Fact]
-    public void SendMessage_RunsBasicPublish()
+    public async Task SendMessage_RunsBasicPublish()
     {
         var expectedPayload = KeyValuePair.Create("crash", "test");
         byte[] actualMessage = [];
         KeyValuePair<string, string> actualText;
+        
+        _channel
+            .When(x => x.BasicPublishAsync(
+                string.Empty, MessageQueues.NewForexRate, false,
+                Arg.Any<IProperties>(),
+                Arg.Any<ReadOnlyMemory<byte>>(),
+                Arg.Any<CancellationToken>()))
+            .Do(callInfo => actualMessage = ((ReadOnlyMemory<byte>)callInfo[4]).ToArray());
 
-        _channelMock
-            .Setup(x => x.BasicPublish(string.Empty, MessageQueues.NewForexRate, false, null, It.IsAny<ReadOnlyMemory<byte>>()))
-            .Callback((string _, string _, bool _, IBasicProperties _, ReadOnlyMemory<byte> message) => actualMessage = message.ToArray());
-
-        _service.SendMessage(MessageQueues.NewForexRate, expectedPayload);
+        await _service.SendMessage(MessageQueues.NewForexRate, expectedPayload);
 
         // Assert
-        _channelMock
-            .Verify(x => x.BasicPublish(string.Empty, MessageQueues.NewForexRate, false, null, It.IsAny<ReadOnlyMemory<byte>>()), Times.Once);
+        await _channel
+            .Received(1)
+            .BasicPublishAsync(
+                string.Empty, MessageQueues.NewForexRate, false,
+                Arg.Any<IProperties>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>());
 
-        actualMessage.Should().NotBeEmpty();
+        actualMessage.ShouldNotBeEmpty();
         actualText = Encoding.UTF8.GetString(actualMessage).FromJson<KeyValuePair<string, string>>();
-        actualText.Should().BeEquivalentTo(expectedPayload);
+        actualText.ShouldBeEquivalentTo(expectedPayload);
     }
 }

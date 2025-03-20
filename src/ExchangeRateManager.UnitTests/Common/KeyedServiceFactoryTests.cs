@@ -2,11 +2,11 @@
 using ExchangeRateManager.ApiClients.Interfaces;
 using ExchangeRateManager.Common;
 using ExchangeRateManager.Common.Configuration;
-using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Moq;
-
+using NSubstitute;
+using Shouldly;
+    
 namespace ExchangeRateManager.Tests.UnitTests.Common;
 
 /// <summary>
@@ -14,8 +14,8 @@ namespace ExchangeRateManager.Tests.UnitTests.Common;
 /// </summary>
 public class KeyedServiceFactoryTests
 {
-    private readonly Mock<IKeyedServiceProvider> _serviceProviderMock = new();
-    private readonly Mock<IOptionsMonitor<Settings>> _optionsMonitorMock = new();
+    private readonly IKeyedServiceProvider _serviceProvider = Substitute.For<IKeyedServiceProvider>();
+    private readonly IOptionsMonitor<Settings> _optionsMonitor = Substitute.For<IOptionsMonitor<Settings>>();
 
     [Fact]
     public void GetRequiredKeyedService_ServiceIsMapped_ReturnsService()
@@ -28,24 +28,25 @@ public class KeyedServiceFactoryTests
                 { typeof(IForexClient).FullName!, typeof(ForexClientStub).FullName! }
             }
         };
-        _optionsMonitorMock
-            .Setup(x => x.CurrentValue)
+        _optionsMonitor
+            .CurrentValue
             .Returns(settings);
 
-        _serviceProviderMock
-            .Setup(x => x.GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName))
+        _serviceProvider
+            .GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName)
             .Returns(new ForexClientStub());
 
         // Act
-        var keyedServiceFactory = new KeyedServiceFactory(_serviceProviderMock.Object, _optionsMonitorMock.Object);
+        var keyedServiceFactory = new KeyedServiceFactory(_serviceProvider, _optionsMonitor);
         var service = keyedServiceFactory.Create<IForexClient>();
 
         // Assert
-        service.Should().NotBeNull();
-        service.Should().BeOfType<ForexClientStub>();
-        _optionsMonitorMock.Verify(x => x.CurrentValue, Times.Once);
-        _serviceProviderMock
-            .Verify(x => x.GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName), Times.Once);
+        service.ShouldNotBeNull();
+        service.ShouldBeOfType<ForexClientStub>();
+        _ = _optionsMonitor.Received(1).CurrentValue;
+
+        _serviceProvider
+            .GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName);
 
     }
 
@@ -60,20 +61,21 @@ public class KeyedServiceFactoryTests
                 { typeof(IForexClient).FullName!, null }
             }
         };
-        _optionsMonitorMock
-            .Setup(x => x.CurrentValue)
+        _optionsMonitor
+            .CurrentValue
             .Returns(settings);
 
         // Act
-        var keyedServiceFactory = new KeyedServiceFactory(_serviceProviderMock.Object, _optionsMonitorMock.Object);
+        var keyedServiceFactory = new KeyedServiceFactory(_serviceProvider, _optionsMonitor);
         var action = keyedServiceFactory.Create<IForexClient>;
 
         // Assert
-        action.Should().Throw<TypeLoadException>();
+        action.ShouldThrow<TypeLoadException>();
+        _ = _optionsMonitor.Received(1).CurrentValue;
 
-        _optionsMonitorMock.Verify(x => x.CurrentValue, Times.Once);
-        _serviceProviderMock
-            .Verify(x => x.GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName), Times.Never);
+        _serviceProvider
+            .DidNotReceive()
+            .GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName);
     }
 
     [Fact]
@@ -81,18 +83,20 @@ public class KeyedServiceFactoryTests
     {
         // Arrange
         Settings settings = new() { };
-        _optionsMonitorMock
-            .Setup(x => x.CurrentValue)
+        _optionsMonitor
+            .CurrentValue
             .Returns(settings);
 
         // Act
-        var keyedServiceFactory = new KeyedServiceFactory(_serviceProviderMock.Object, _optionsMonitorMock.Object);
+        var keyedServiceFactory = new KeyedServiceFactory(_serviceProvider, _optionsMonitor);
         var action = keyedServiceFactory.Create<IForexClient>;
 
         // Assert
-        action.Should().Throw<TypeLoadException>();
-        _optionsMonitorMock.Verify(x => x.CurrentValue, Times.Once);
-        _serviceProviderMock
-            .Verify(x => x.GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName), Times.Never);
+        action.ShouldThrow<TypeLoadException>();
+        _ = _optionsMonitor.Received(1).CurrentValue;
+
+        _serviceProvider
+            .DidNotReceive()
+            .GetRequiredKeyedService(typeof(IForexClient), typeof(ForexClientStub).FullName);
     }
 }

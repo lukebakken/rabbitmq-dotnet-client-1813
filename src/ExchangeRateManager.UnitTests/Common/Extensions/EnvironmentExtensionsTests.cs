@@ -1,8 +1,8 @@
 ﻿using ExchangeRateManager.Common.Extensions;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
-using Moq;
+using NSubstitute;
 
 using Environments = ExchangeRateManager.Common.Constants.Environments;
 
@@ -23,10 +23,10 @@ public class EnvironmentExtensionsTests
     public void TestEnvironmentChecks(int index, string environment)
     {
         //Arrange
-        Mock<IWebHostEnvironment> _webHostEnvironmentMock = new();
+        IWebHostEnvironment _webHostEnvironment = Substitute.For<IWebHostEnvironment>();
 
-        _webHostEnvironmentMock
-            .Setup(x => x.EnvironmentName)
+        _webHostEnvironment
+            .EnvironmentName
             .Returns(environment);
 
         var expected = Enumerable
@@ -36,18 +36,17 @@ public class EnvironmentExtensionsTests
 
 
         // Act
-        var webHostEnvironment = _webHostEnvironmentMock.Object;
         var results = new List<bool> {
-            _webHostEnvironmentMock.Object.IsLocal(),
-            _webHostEnvironmentMock.Object.IsIntegrationTests(),
-            _webHostEnvironmentMock.Object.IsDevelopment(),
-            _webHostEnvironmentMock.Object.IsTest(),
-            _webHostEnvironmentMock.Object.IsStaging(),
-            _webHostEnvironmentMock.Object.IsProduction(),
-            _webHostEnvironmentMock.Object.IsHighLevel(),
+            _webHostEnvironment.IsLocal(),
+            _webHostEnvironment.IsIntegrationTests(),
+            _webHostEnvironment.IsDevelopment(),
+            _webHostEnvironment.IsTest(),
+            _webHostEnvironment.IsStaging(),
+            _webHostEnvironment.IsProduction(),
+            _webHostEnvironment.IsHighLevel()
         };
 
         // Assert
-        results.Should().BeEquivalentTo(expected);
+        results.ShouldBeEquivalentTo(expected);
     }
 }

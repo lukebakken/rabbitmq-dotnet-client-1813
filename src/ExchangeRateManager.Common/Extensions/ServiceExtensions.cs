@@ -3,16 +3,13 @@ using ExchangeRateManager.Common.Constants;
 using ExchangeRateManager.Common.Exceptions;
 using ExchangeRateManager.Common.Interfaces.Base;
 using ExchangeRateManager.Common.Interfaces.ServiceLifetime;
-using Hellang.Middleware.ProblemDetails;
-using Microsoft.AspNetCore.Connections;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyModel;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
-using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using IConnectionFactory = RabbitMQ.Client.IConnectionFactory;
 
 namespace ExchangeRateManager.Common.Extensions;
 
@@ -145,7 +142,7 @@ public static class ServiceExtensions
     /// </summary>
     public static IServiceCollection AddRabbitMqConnectionFactory(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddSingleton<IAsyncConnectionFactory>(x => new ConnectionFactory
+        services.AddSingleton<IConnectionFactory>(x => new ConnectionFactory
         {
             Uri = new Uri(configuration.GetConnectionString(ConnectionStrings.MessageQueue)!)
         });

@@ -1,9 +1,10 @@
 using ExchangeRateManager.Controllers;
 using ExchangeRateManager.Dtos;
 using ExchangeRateManager.Services.Interfaces;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Mvc;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 
 namespace ExchangeRateManager.Tests.UnitTests.Controllers;
 
@@ -12,12 +13,12 @@ namespace ExchangeRateManager.Tests.UnitTests.Controllers;
 /// </summary>
 public class ExchangeRateControllerTests
 {
-    private readonly Mock<IExchangeRateService> _exchangeRateServiceMock = new();
+    private readonly IExchangeRateService _exchangeRateService = Substitute.For<IExchangeRateService>();
     private readonly ExchangeRateController _controller;
 
     public ExchangeRateControllerTests()
     {
-        _controller = new(_exchangeRateServiceMock.Object);
+        _controller = new(_exchangeRateService);
     }
 
     [Fact]
@@ -39,39 +40,42 @@ public class ExchangeRateControllerTests
             ToCurrencyCode = expectedRequest.ToCurrencyCode
         };
 
-        _exchangeRateServiceMock
-            .Setup(x => x.GetForexRate(It.IsAny<ExchangeRateRequestDto>()))
-            .Callback<ExchangeRateRequestDto>(x => actualRequest = x)
-            .ReturnsAsync(expectedResponse);
+        _exchangeRateService
+            .GetForexRate(Arg.Any<ExchangeRateRequestDto>())
+            .Returns(x => expectedResponse)
+            .AndDoes(x => actualRequest = x.Arg<ExchangeRateRequestDto>());
 
         // act
         var result = await _controller.GetLatestRateExchange(
             expectedRequest.FromCurrencyCode, expectedRequest.ToCurrencyCode);
 
         // assert
-        _exchangeRateServiceMock
-            .Verify(x => x.GetForexRate(It.IsAny<ExchangeRateRequestDto>()), Times.Once);
-        result.Should().BeOfType<OkObjectResult>();
+        await _exchangeRateService
+            .Received(1)
+            .GetForexRate(Arg.Any<ExchangeRateRequestDto>());
+
+        result.ShouldBeOfType<OkObjectResult>();
         actualResponse = (result as OkObjectResult)?.Value as ExchangeRateResponseDto;
-        expectedResponse.Should().BeEquivalentTo(actualResponse);
-        expectedRequest.Should().BeEquivalentTo(actualRequest);
+        expectedResponse.ShouldBeEquivalentTo(actualResponse);
+        expectedRequest.ShouldBeEquivalentTo(actualRequest);
     }
 
     [Fact]
     public void GetForexRate_ThrowsException()
     {
         // arrange
-        _exchangeRateServiceMock
-            .Setup(x => x.GetForexRate(It.IsAny<ExchangeRateRequestDto>()))
-            .ThrowsAsync(new TestException());
+        _exchangeRateService
+            .GetForexRate(Arg.Any<ExchangeRateRequestDto>())
+            .ThrowsAsync(new InvalidOperationException());
 
         // act
         var testAction = async () => await _controller.GetLatestRateExchange(
             Guid.NewGuid().ToString(), Guid.NewGuid().ToString());
 
         // assert
-        testAction.Should().ThrowAsync<TestException>();
-        _exchangeRateServiceMock
-            .Verify(x => x.GetForexRate(It.IsAny<ExchangeRateRequestDto>()), Times.Once);
+        testAction.ShouldThrowAsync<InvalidOperationException>();
+        _exchangeRateService
+            .Received(1)
+            .GetForexRate(Arg.Any<ExchangeRateRequestDto>());
     }
 }

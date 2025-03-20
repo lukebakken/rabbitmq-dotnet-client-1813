@@ -3,7 +3,7 @@ using AutoMapper;
 using ExchangeRateManager.ApiClients.Responses;
 using ExchangeRateManager.Dtos;
 using ExchangeRateManager.MappingProfiles;
-using FluentAssertions;
+using Shouldly;
 
 namespace ExchangeRateManager.Tests.UnitTests.MappingProfiles;
 
@@ -42,6 +42,6 @@ public class ExchangeRateProfileTests
         };
 
         var actualDto = _mapper.Map<ExchangeRateResponseDto>(clientResponse);
-        expectedDto.Should().BeEquivalentTo(actualDto);
+        expectedDto.ShouldBeEquivalentTo(actualDto);
     }
 }

@@ -2,7 +2,7 @@ using DalSoft.RestClient;
 using DalSoft.RestClient.Testing;
 using ExchangeRateManager.Common.Exceptions;
 using ExchangeRateManager.Dtos;
-using FluentAssertions;
+using Shouldly;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
 
@@ -24,11 +24,11 @@ public class ExchangeRateTests(TestsWebApplicationFactory factory) : Integration
 
         // Assert
         async Task<dynamic> action() => await response
-            .Act<HttpResponseMessage>(x => x.StatusCode.Should().Be(HttpStatusCode.OK))
+            .Act<HttpResponseMessage>(x => x.StatusCode.ShouldBe(HttpStatusCode.OK))
             .Act<ExchangeRateResponseDto>(x =>
             {
-                x.FromCurrencyCode.Should().BeEquivalentTo("USD");
-                x.ToCurrencyCode.Should().BeEquivalentTo("EUR");
+                x.FromCurrencyCode.ShouldBeEquivalentTo("USD");
+                x.ToCurrencyCode.ShouldBeEquivalentTo("EUR");
             });
 
         await TestHandler(action);
@@ -46,8 +46,8 @@ public class ExchangeRateTests(TestsWebApplicationFactory factory) : Integration
         
         // Assert
         async Task<dynamic> action() => await response
-            .Act<HttpResponseMessage>(x => x.StatusCode.Should().Be(HttpStatusCode.BadRequest))
-            .Act<ProblemDetails>(x => x.Title.Should().Be(new InvalidExchangeRateException(default!).Details.Title));
+            .Act<HttpResponseMessage>(x => x.StatusCode.ShouldBe(HttpStatusCode.BadRequest))
+            .Act<ProblemDetails>(x => x.Title.ShouldBe(new InvalidExchangeRateException(default!).Details.Title));
 
         await TestHandler(action);
     }

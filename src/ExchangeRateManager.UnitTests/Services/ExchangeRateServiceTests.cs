@@ -12,14 +12,15 @@ using ExchangeRateManager.Repositories.Interfaces;
 using ExchangeRateManager.Services;
 using ExchangeRateManager.Services.Interfaces;
 using ExchangeRateManager.Tests.UnitTests.Base;
-using FluentAssertions;
 using Hangfire;
 using Hangfire.Common;
 using Hangfire.States;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
+using Shouldly;
 
 namespace ExchangeRateManager.Tests.UnitTests.Services;
 
@@ -29,18 +30,18 @@ namespace ExchangeRateManager.Tests.UnitTests.Services;
 public class ExchangeRateServiceTests : MapperTestBase
 {
     private readonly ExchangeRateService _service;
-    private readonly Mock<IForexClient> _forexClientMock = new();
-    private readonly Mock<IOptionsSnapshot<Settings>> _settingsMock = new();
-    private readonly Mock<IForexRateRepository> _forexRateRepositoryMock = new();
-    private readonly Mock<IBackgroundJobClient> _backgroundJobClientMock = new();
-    private readonly Mock<IMessageQueueService> _messageQueueServiceMock = new();
+    private readonly IForexClient _forexClient = Substitute.For<IForexClient>();
+    private readonly IOptionsSnapshot<Settings> _settings = Substitute.For<IOptionsSnapshot<Settings>>();
+    private readonly IForexRateRepository _forexRateRepository = Substitute.For<IForexRateRepository>();
+    private readonly IBackgroundJobClient _backgroundJobClient = Substitute.For<IBackgroundJobClient>();
+    private readonly IMessageQueueService _messageQueueService = Substitute.For<IMessageQueueService>();
 
     public ExchangeRateServiceTests() : base(new MapperConfiguration(mc => mc.AddProfile(new ForexRateProfile())))
     {
         _service = new ExchangeRateService(
-            _forexClientMock.Object, _forexRateRepositoryMock.Object,
-            _messageQueueServiceMock.Object, _backgroundJobClientMock.Object,
-            _settingsMock.Object, _mockedMapper, NullLogger<ExchangeRateService>.Instance);
+            _forexClient, _forexRateRepository,
+            _messageQueueService, _backgroundJobClient,
+            _settings, _mockedMapper, NullLogger<ExchangeRateService>.Instance);
     }
 
     #region PreferLiveData Tests
@@ -51,7 +52,14 @@ public class ExchangeRateServiceTests : MapperTestBase
         var requestDto = _fixture.Create<ExchangeRateRequestDto>();
         var expectedClientResponse = _fixture.Create<GetCurrencyExchangeRatesResponse>();
         expectedClientResponse.RealtimeCurrencyExchangeRate!.TimeZone = "UTC";
-        var expectedResponseDto = _actualMapper.Map<ExchangeRateResponseDto>(expectedClientResponse);
+        var expectedResponseDto = _actualMapper
+            .Map<ExchangeRateResponseDto>(expectedClientResponse)
+            with
+            {
+                CreatedAt = null,
+                UpdatedAt = null,
+            };
+
         var expectedEntity = _actualMapper.Map<ForexRateEntity>(expectedResponseDto);
         expectedEntity.CreatedAt = DateTime.UtcNow;
 
@@ -66,49 +74,52 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
         SetupMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
-            .ReturnsAsync((string a, string b) =>
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
+            .Returns(expectedClientResponse)
+            .AndDoes(callInfo => actualRequestDto = new ExchangeRateRequestDto
             {
-                actualRequestDto = new ExchangeRateRequestDto { FromCurrencyCode = a, ToCurrencyCode = b };
-                return expectedClientResponse;
+                FromCurrencyCode = (string)callInfo[0],
+                ToCurrencyCode = (string)callInfo[1]
             });
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ReturnsAsync((ForexRateKey id) =>
-            {
-                actualForexRateKey = id;
-                return expectedEntity;
-            });
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .Returns(expectedEntity)
+            .AndDoes(callInfo => actualForexRateKey = callInfo.Arg<ForexRateKey>());
 
         // Act
         actualResponseDto = await _service.GetForexRate(requestDto);
 
         // Assert
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await _forexClient
+            .Received(1)
+            .GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
+        await _forexRateRepository
+            .Received(1)
+            .FindByIdAsync(Arg.Any<ForexRateKey>());
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Once);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        ReceivedMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(1);
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Once);
+        _backgroundJobClient
+            .Received(1)
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
 
-        actualRequestDto.Should().BeEquivalentTo(requestDto);
-        actualResponseDto.Should().BeEquivalentTo(expectedResponseDto, opt => opt
-            .Excluding(x => x.CreatedAt).Excluding(x => x.UpdatedAt));
-        actualResponseDto.CreatedAt.Should().BeBefore(actualResponseDto.UpdatedAt!.Value);
+        actualRequestDto.ShouldBeEquivalentTo(requestDto);
+        expectedResponseDto = expectedResponseDto with
+        {
+            CreatedAt = actualResponseDto.CreatedAt,
+            UpdatedAt = actualResponseDto.UpdatedAt,
+        };
+        actualResponseDto.ShouldBeEquivalentTo(expectedResponseDto);
+        actualResponseDto.CreatedAt!.Value.ShouldBeLessThan(actualResponseDto.UpdatedAt!.Value);
     }
 
     [Fact]
@@ -125,31 +136,30 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
             .ThrowsAsync(new BadHttpRequestException("Test"));
 
         // Act
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<InvalidExchangeRateException>();
+        await action.ShouldThrowAsync<InvalidExchangeRateException>();
 
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .Received(1)
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
     [Fact]
@@ -174,27 +184,29 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
         SetupMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
         SetupMap<ForexRateEntity, ExchangeRateResponseDto>();
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
-            .Callback((string a, string b) =>
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
+            .ThrowsAsync(new HttpClientLimitReachedException("Test"))
+            .AndDoes(callInfo =>
             {
-                actualRequestDto = new ExchangeRateRequestDto { FromCurrencyCode = a, ToCurrencyCode = b };
-            })
-            .ThrowsAsync(new HttpClientLimitReachedException("Test"));
+                actualRequestDto = new ExchangeRateRequestDto
+                {
+                    FromCurrencyCode = (string)callInfo[0],
+                    ToCurrencyCode = (string)callInfo[1]
+                };
+            });
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ReturnsAsync((ForexRateKey x) =>
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .Returns(callInfo =>
             {
-                actualRateId = x;
+                actualRateId = (ForexRateKey) callInfo[0];
                 return expectedEntity;
             });
 
@@ -203,25 +215,30 @@ public class ExchangeRateServiceTests : MapperTestBase
             actualResponseDto = await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().NotThrowAsync();
+        await action.ShouldNotThrowAsync();
 
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await _forexClient
+            .Received(1)
+            .GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
+        await _forexRateRepository
+            .Received(1)
+            .FindByIdAsync(Arg.Any<ForexRateKey>());
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Once);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        ReceivedMap<ForexRateEntity, ExchangeRateResponseDto>(1);
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive()
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
 
-        actualRequestDto.Should().BeEquivalentTo(requestDto);
-        actualResponseDto.Should().BeEquivalentTo(expectedResponseDto, opt => opt.Excluding(x => x.CreatedAt));
-        actualResponseDto!.CreatedAt.Should().NotBeNull();
-        actualRateId.Should().BeEquivalentTo(expectedRateId);
+        actualRequestDto.ShouldBeEquivalentTo(requestDto);
+        expectedResponseDto = expectedResponseDto with { CreatedAt = actualResponseDto!.CreatedAt };
+        expectedResponseDto = expectedResponseDto with { UpdatedAt = actualResponseDto!.UpdatedAt };
+        actualResponseDto.ShouldBeEquivalentTo(expectedResponseDto);
+        actualRateId.ShouldBeEquivalentTo(expectedRateId);
+        actualResponseDto!.CreatedAt.ShouldNotBeNull();
     }
 
     [Fact]
@@ -240,21 +257,23 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
-            .Callback((string a, string b) =>
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
+            .ThrowsAsync(new HttpClientLimitReachedException("Test"))
+            .AndDoes(callInfo =>
             {
-                actualRequestDto = new ExchangeRateRequestDto { FromCurrencyCode = a, ToCurrencyCode = b };
-            })
-            .ThrowsAsync(new HttpClientLimitReachedException("Test"));
+                actualRequestDto = new ExchangeRateRequestDto
+                {
+                    FromCurrencyCode = (string)callInfo[0],
+                    ToCurrencyCode = (string)callInfo[1]
+                };
+            });
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .Callback((ForexRateKey x) => actualRateId = x);
+        _forexRateRepository
+            .When(x => x.FindByIdAsync(Arg.Any<ForexRateKey>()))
+            .Do(callInfo => actualRateId = (ForexRateKey) callInfo[0]);
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
 
@@ -262,23 +281,25 @@ public class ExchangeRateServiceTests : MapperTestBase
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<HttpClientLimitReachedException>();
+        await action.ShouldThrowAsync<HttpClientLimitReachedException>();
 
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await _forexClient
+            .Received(1)
+            .GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive()
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
 
-        actualRequestDto.Should().BeEquivalentTo(requestDto);
-        actualRateId.Should().BeEquivalentTo(expectedRateId);
+        actualRequestDto.ShouldBeEquivalentTo(requestDto);
+        actualRateId.ShouldBeEquivalentTo(expectedRateId);
     }
 
     [Fact]
@@ -294,13 +315,11 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ThrowsAsync(new TestException());
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .ThrowsAsync(new InvalidOperationException());
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
 
@@ -308,20 +327,22 @@ public class ExchangeRateServiceTests : MapperTestBase
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<TestException>();
+        await action.ShouldThrowAsync<InvalidOperationException>();
 
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await _forexClient
+            .Received(1)
+            .GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive()
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
     [Fact]
@@ -343,41 +364,42 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
         SetupMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync(expectedClientResponse);
+        _forexClient
+            .GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>())
+            .Returns(expectedClientResponse);
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ReturnsAsync(expectedEntity);
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .Returns(expectedEntity);
 
-        _backgroundJobClientMock
-            .Setup(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()))
-            .Throws<TestException>();
+        _backgroundJobClient
+            .Create(Arg.Any<Job>(), Arg.Any<IState>())
+            .Throws<InvalidOperationException>();
 
         // Act
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<TestException>();
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        await action.ShouldThrowAsync<InvalidOperationException>();
+        await _forexClient
+            .Received(1)
+            .GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
+        await _forexRateRepository
+            .Received(1)
+            .FindByIdAsync(Arg.Any<ForexRateKey>());
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Once);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        ReceivedMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(1);
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Once);
+        _backgroundJobClient
+            .Received(1)
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
     #endregion PreferLiveData Tests
@@ -406,16 +428,13 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
+        _settings.Value.Returns(settings);
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
-
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ReturnsAsync((ForexRateKey x) =>
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .Returns(callInfo =>
             {
-                actualRateId = x;
+                actualRateId = (ForexRateKey) callInfo[0];
                 return expectedEntity;
             });
 
@@ -425,20 +444,22 @@ public class ExchangeRateServiceTests : MapperTestBase
         // Act
         actualResponseDto = await _service.GetForexRate(requestDto);
 
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        await _forexClient
+            .DidNotReceive()
+            .GetCurrencyExchangeRates(Arg.Any<string>(), Arg.Any<string>());
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
+        await _forexRateRepository
+            .Received(1)
+            .FindByIdAsync(Arg.Any<ForexRateKey>());
         
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Once);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        ReceivedMap<ForexRateEntity, ExchangeRateResponseDto>(1);
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive().Create(Arg.Any<Job>(), Arg.Any<IState>());
 
-        actualResponseDto.Should().BeEquivalentTo(expectedResponseDto);
-        actualRateId.Should().BeEquivalentTo(expectedRateId);
+        actualResponseDto.ShouldBeEquivalentTo(expectedResponseDto);
+        actualRateId.ShouldBeEquivalentTo(expectedRateId);
     }
 
     [Fact]
@@ -465,23 +486,25 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ReturnsAsync((ForexRateKey x) =>
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .Returns(callInfo =>
             {
-                actualRateId = x;
+                actualRateId = (ForexRateKey) callInfo[0];
                 return expectedEntity;
             });
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
-            .ReturnsAsync((string a, string b) =>
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
+            .Returns(callInfo =>
             {
-                actualRequestDto = new ExchangeRateRequestDto { FromCurrencyCode = a, ToCurrencyCode = b };
+                actualRequestDto = new ExchangeRateRequestDto
+                {
+                    FromCurrencyCode = (string) callInfo[0],
+                    ToCurrencyCode = (string) callInfo[1]
+                };
                 return expectedClientResponse;
             });
 
@@ -493,24 +516,23 @@ public class ExchangeRateServiceTests : MapperTestBase
         actualResponseDto = await _service.GetForexRate(requestDto);
 
         // Assert
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode), Times.Once);
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode);
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        ReceivedMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(1);
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Once);
+        _backgroundJobClient
+            .Received(1).Create(Arg.Any<Job>(), Arg.Any<IState>());
 
-        actualRequestDto.Should().BeEquivalentTo(requestDto);
-        actualRateId.Should().BeEquivalentTo(expectedRateId);
-        actualResponseDto.Should().BeEquivalentTo(expectedResponseDto, opt => opt
-            .Excluding(x => x.CreatedAt).Excluding(x => x.UpdatedAt));
-        actualResponseDto.CreatedAt.Should().NotBeNull();
-        actualResponseDto.UpdatedAt.Should().NotBeNull();
+        actualRequestDto.ShouldBeEquivalentTo(requestDto);
+        actualRateId.ShouldBeEquivalentTo(expectedRateId);
+        actualResponseDto.ShouldBeEquivalentTo(expectedResponseDto);
+        actualResponseDto.CreatedAt.ShouldNotBeNull();
+        actualResponseDto.UpdatedAt.ShouldNotBeNull();
     }
 
     [Fact]
@@ -535,22 +557,24 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ReturnsAsync((ForexRateKey x) =>
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .Returns(callInfo =>
             {
-                actualRateId = x;
+                actualRateId = (ForexRateKey)callInfo[0];
                 return expectedEntity;
             });
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
-            .Callback((string a, string b) => actualRequestDto = new ExchangeRateRequestDto { FromCurrencyCode = a, ToCurrencyCode = b })
-            .ThrowsAsync(new HttpClientLimitReachedException("test"));
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
+            .ThrowsAsync(new HttpClientLimitReachedException("test"))
+            .AndDoes(callInfo => actualRequestDto = new ExchangeRateRequestDto
+            {
+                FromCurrencyCode = (string) callInfo[0],
+                ToCurrencyCode = (string) callInfo[1]
+            });
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
         SetupMap<ForexRateEntity, ExchangeRateResponseDto>();
@@ -559,22 +583,23 @@ public class ExchangeRateServiceTests : MapperTestBase
         var action = async () => actualResponseDto = await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().NotThrowAsync();
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode), Times.Once);
+        await action.ShouldNotThrowAsync();
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode);
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        ReceivedMap<ForexRateEntity, ExchangeRateResponseDto>(1);
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive()
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
 
-        actualRequestDto.Should().BeEquivalentTo(requestDto);
-        actualRateId.Should().BeEquivalentTo(expectedRateId);
-        actualResponseDto.Should().BeEquivalentTo(expectedResponseDto);
+        actualRequestDto.ShouldBeEquivalentTo(requestDto);
+        actualRateId.ShouldBeEquivalentTo(expectedRateId);
+        actualResponseDto.ShouldBeEquivalentTo(expectedResponseDto);
     }
 
     [Fact]
@@ -597,15 +622,17 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
-            .ReturnsAsync((string a, string b) =>
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
+            .Returns(callInfo =>
             {
-                actualRequestDto = new ExchangeRateRequestDto { FromCurrencyCode = a, ToCurrencyCode = b };
+                actualRequestDto = new ExchangeRateRequestDto
+                {
+                    FromCurrencyCode = (string)callInfo[0],
+                    ToCurrencyCode = (string)callInfo[1]
+                };
                 return expectedClientResponse;
             });
 
@@ -616,20 +643,26 @@ public class ExchangeRateServiceTests : MapperTestBase
         actualResponseDto = await _service.GetForexRate(requestDto);
 
         // Assert
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode), Times.Once);
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode);
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        ReceivedMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(1);
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Once);
+        _backgroundJobClient
+            .Received(1)
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
 
-        actualRequestDto.Should().BeEquivalentTo(requestDto);
-        actualResponseDto.Should().BeEquivalentTo(expectedResponseDto, opt => opt.Excluding(x => x.CreatedAt));
+        expectedResponseDto = expectedResponseDto with
+        {
+            CreatedAt = actualResponseDto.CreatedAt,
+            UpdatedAt = actualResponseDto.UpdatedAt
+        };
+        actualRequestDto.ShouldBeEquivalentTo(requestDto);
+        actualResponseDto.ShouldBeEquivalentTo(expectedResponseDto);
     }
 
     [Fact]
@@ -646,12 +679,10 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
             .ThrowsAsync(new HttpClientLimitReachedException("test"));
 
         SetupMap<ExchangeRateRequestDto,ForexRateKey>();
@@ -660,18 +691,19 @@ public class ExchangeRateServiceTests : MapperTestBase
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<HttpClientLimitReachedException>();
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode), Times.Once);
+        await action.ShouldThrowAsync<HttpClientLimitReachedException>();
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode);
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive()
+            .Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
     [Fact]
@@ -688,12 +720,10 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
             .ThrowsAsync(new BadHttpRequestException("test"));
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
@@ -702,19 +732,19 @@ public class ExchangeRateServiceTests : MapperTestBase
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<InvalidExchangeRateException>();
+        await action.ShouldThrowAsync<InvalidExchangeRateException>();
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode), Times.Once);
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode);
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive().Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
     [Fact]
@@ -731,13 +761,11 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexClientMock
-            .Setup(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode))
-            .ThrowsAsync(new TestException());
+        _forexClient
+            .GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode)
+            .ThrowsAsync(new InvalidOperationException());
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
 
@@ -745,19 +773,19 @@ public class ExchangeRateServiceTests : MapperTestBase
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<TestException>();
+        await action.ShouldThrowAsync<InvalidOperationException>();
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode), Times.Once);
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
+        await _forexClient
+            .Received(1).GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode);
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive().Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
     [Fact]
@@ -774,13 +802,11 @@ public class ExchangeRateServiceTests : MapperTestBase
             }
         };
 
-        _settingsMock
-            .Setup(x => x.Value)
-            .Returns(settings);
+        _settings.Value.Returns(settings);
 
-        _forexRateRepositoryMock
-            .Setup(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()))
-            .ThrowsAsync(new TestException());
+        _forexRateRepository
+            .FindByIdAsync(Arg.Any<ForexRateKey>())
+            .ThrowsAsync(new InvalidOperationException());
 
         SetupMap<ExchangeRateRequestDto, ForexRateKey>();
 
@@ -788,19 +814,19 @@ public class ExchangeRateServiceTests : MapperTestBase
         var action = async () => await _service.GetForexRate(requestDto);
 
         // Assert
-        await action.Should().ThrowAsync<TestException>();
+        await action.ShouldThrowAsync<InvalidOperationException>();
 
-        _forexRateRepositoryMock
-            .Verify(x => x.FindByIdAsync(It.IsAny<ForexRateKey>()), Times.Once);
-        _forexClientMock
-            .Verify(x => x.GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode), Times.Never);
+        await _forexRateRepository
+            .Received(1).FindByIdAsync(Arg.Any<ForexRateKey>());
+        await _forexClient
+            .DidNotReceive().GetCurrencyExchangeRates(requestDto.FromCurrencyCode, requestDto.ToCurrencyCode);
 
-        VerifyMap<ExchangeRateRequestDto, ForexRateKey>(Times.Once);
-        VerifyMap<ForexRateEntity, ExchangeRateResponseDto>(Times.Never);
-        VerifyMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>(Times.Never);
+        ReceivedMap<ExchangeRateRequestDto, ForexRateKey>(1);
+        DidNotReceiveMap<ForexRateEntity, ExchangeRateResponseDto>();
+        DidNotReceiveMap<GetCurrencyExchangeRatesResponse, ExchangeRateResponseDto>();
 
-        _backgroundJobClientMock
-            .Verify(x => x.Create(It.IsAny<Job>(), It.IsAny<IState>()), Times.Never);
+        _backgroundJobClient
+            .DidNotReceive().Create(Arg.Any<Job>(), Arg.Any<IState>());
     }
 
     #endregion PreferStoredData Tests
@@ -817,13 +843,13 @@ public class ExchangeRateServiceTests : MapperTestBase
         //Act
         await _service.UpdateForexRate(rateToUpdate);
 
-        _forexRateRepositoryMock
-            .Verify(x => x.Upsert(It.IsAny<ForexRateEntity>()), Times.Once);
+        await _forexRateRepository
+            .Received(1).Upsert(Arg.Any<ForexRateEntity>());
 
-        _messageQueueServiceMock
-            .Verify(x => x.SendMessage(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Once);
+        _messageQueueService
+            .Received(1).SendMessage(MessageQueues.NewForexRate, Arg.Any<ExchangeRateResponseDto>());
 
-        VerifyMap<ExchangeRateResponseDto, ForexRateEntity>(Times.Once);
+        ReceivedMap<ExchangeRateResponseDto, ForexRateEntity>(1);
     }
 
     [Fact]
@@ -836,13 +862,13 @@ public class ExchangeRateServiceTests : MapperTestBase
         //Act
         await _service.UpdateForexRate(rateToUpdate, rateToUpdate.LastRefreshed!.Value.AddMinutes(-5));
 
-        _forexRateRepositoryMock
-            .Verify(x => x.Upsert(It.IsAny<ForexRateEntity>()), Times.Once);
+        await _forexRateRepository
+            .Received(1).Upsert(Arg.Any<ForexRateEntity>());
 
-        _messageQueueServiceMock
-            .Verify(x => x.SendMessage(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Once);
+        _messageQueueService
+            .Received(1).SendMessage(MessageQueues.NewForexRate, Arg.Any<ExchangeRateResponseDto>());
 
-        VerifyMap<ExchangeRateResponseDto, ForexRateEntity>(Times.Once);
+        ReceivedMap<ExchangeRateResponseDto, ForexRateEntity>(1);
     }
 
     [Fact]
@@ -855,13 +881,13 @@ public class ExchangeRateServiceTests : MapperTestBase
         //Act
         await _service.UpdateForexRate(rateToUpdate, rateToUpdate.LastRefreshed!.Value.AddMinutes(5));
 
-        _forexRateRepositoryMock
-            .Verify(x => x.Upsert(It.IsAny<ForexRateEntity>()), Times.Once);
+        await _forexRateRepository
+            .Received(1).Upsert(Arg.Any<ForexRateEntity>());
 
-        _messageQueueServiceMock
-            .Verify(x => x.SendMessage(MessageQueues.NewForexRate, It.IsAny<ExchangeRateResponseDto>()), Times.Never);
+        _messageQueueService
+            .DidNotReceive().SendMessage(MessageQueues.NewForexRate, Arg.Any<ExchangeRateResponseDto>());
 
-        VerifyMap<ExchangeRateResponseDto, ForexRateEntity>(Times.Once);
+        ReceivedMap<ExchangeRateResponseDto, ForexRateEntity>(1);
     }
     #endregion UpdateRateExchange Tests
 }

@@ -12,11 +12,13 @@ namespace ExchangeRateManager.Services
     {
         private readonly ILogger<MessageQueueStubService> _logger = logger;
 
-        public void SendMessage<T>(string queue, T message)
+        public Task SendMessage<T>(string queue, T message, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation(
                 "[{method}] Got a message for '{queue}' queue. Type: {type}; message: {message}",
                 nameof(SendMessage), typeof(T).FullName, queue, message);
+
+            return Task.CompletedTask;
         }
     }
 }

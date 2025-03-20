@@ -8,21 +8,18 @@ namespace ExchangeRateManagerApp.MessageQueueListener
 {
     internal class Program
     {
-        static void Main(string[] args)
+        async static Task Main(string[] args)
         {
             var factory = new ConnectionFactory
             {
                 Uri = new Uri("amqp://guest:guest@rabbitmq:5672/")
             };
 
-            using var connection = factory.CreateConnection();
-            using var channel = connection.CreateModel();
+            using var connection = await factory.CreateConnectionAsync();
+            using var channel = await connection.CreateChannelAsync();
 
-            channel.QueueDeclare(queue: MessageQueues.NewForexRate,
-                                 durable: false,
-                                 exclusive: false,
-                                 autoDelete: false,
-                                 arguments: null);
+            await channel.QueueDeclareAsync(
+                MessageQueues.NewForexRate, false, false, false);
 
             Console.CancelKeyPress += delegate
             {
@@ -34,18 +31,20 @@ namespace ExchangeRateManagerApp.MessageQueueListener
             };
 
             Console.WriteLine(" [*] Waiting for messages. Hit 'Ctrl+C' to terminate.");
-            var consumer = new EventingBasicConsumer(channel);
-            consumer.Received += (model, ea) =>
+            var consumer = new AsyncEventingBasicConsumer(channel);
+            consumer.ReceivedAsync += (model, ea) =>
             {
                 var body = ea.Body.ToArray();
                 var message = Encoding.UTF8.GetString(body);
                 Console.WriteLine($" [x] Received {message}");
-                };
 
-            channel.BasicConsume(queue: MessageQueues.NewForexRate, autoAck: true, consumer: consumer);
+                return Task.CompletedTask;
+            };
+
+            await channel.BasicConsumeAsync(MessageQueues.NewForexRate, true, consumer);
             while (true)
             {
-                Task.Delay(1000);
+                await Task.Delay(1000);
             }
         }
     }
